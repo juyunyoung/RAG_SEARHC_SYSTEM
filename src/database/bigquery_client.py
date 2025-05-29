@@ -159,12 +159,12 @@ class BigQueryClient:
         try:
             # Convert embedding vectors to array format
             for chunk in chunks_data:
-                if isinstance(chunk['embedding_vector'], (list, np.ndarray)):
+                if isinstance(chunk['embedding'], (list, np.ndarray)):
                     # Convert to list if it's numpy array
-                    if isinstance(chunk['embedding_vector'], np.ndarray):
-                        chunk['embedding_vector'] = chunk['embedding_vector'].tolist()
+                    if isinstance(chunk['embedding'], np.ndarray):
+                        chunk['embedding'] = chunk['embedding'].tolist()
                     # Ensure it's a list of floats
-                    chunk['embedding_vector'] = [float(x) for x in chunk['embedding_vector']]
+                    chunk['embedding'] = [float(x) for x in chunk['embedding']]
             
             # First try to save chunks
             chunk_errors = self.client.insert_rows_json(
@@ -222,8 +222,8 @@ class BigQueryClient:
         df = self.client.query(query, job_config=job_config).to_dataframe()
         
         # Convert embedding vectors to numpy arrays if needed
-        if not df.empty and 'embedding_vector' in df.columns:
-            df['embedding_vector'] = df['embedding_vector'].apply(lambda x: np.array(x) if isinstance(x, list) else x)
+        if not df.empty and 'embedding' in df.columns:
+            df['embedding'] = df['embedding'].apply(lambda x: np.array(x) if isinstance(x, list) else x)
         
         return df
 
@@ -251,3 +251,56 @@ class BigQueryClient:
     def get_database(self) -> BigQueryVectorStore:
         # Initialize embeddings
         return self.database
+
+    def save_qa_history(self, user_id: str, document_id: str, question: str, answer: str) -> bool:
+        """Save Q&A history to database"""
+        try:
+            # 현재 시간을 문자열로 변환
+            current_time = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+            
+            # 데이터 준비
+            qa_data = {
+                "user_id": user_id,
+                "document_id": document_id,
+                "question": question,
+                "answer": answer,
+                "timestemp": current_time
+            }
+            
+            print(f"Saving QA history: {qa_data}")  # 디버깅을 위한 로그
+            
+            # 데이터 저장
+            errors = self.client.insert_rows_json(
+                self.qa_table,
+                [qa_data]
+            )
+            
+            if errors:
+                print(f"Error saving QA history: {errors}")
+                return False
+                
+            print("Successfully saved QA history")  # 디버깅을 위한 로그
+            return True
+            
+        except Exception as e:
+            print(f"Error in save_qa_history: {str(e)}")
+            return False
+
+    def get_qa_history(self, user_id: str, document_id: str = None) -> pd.DataFrame:
+        """Get Q&A history for a user and optionally for a specific document"""
+        query = f"""
+        SELECT *
+        FROM `{self.qa_table}`
+        WHERE user_id = @user_id
+        """
+        
+        params = [bigquery.ScalarQueryParameter("user_id", "STRING", user_id)]
+        
+        if document_id:
+            query += " AND document_id = @document_id"
+            params.append(bigquery.ScalarQueryParameter("document_id", "STRING", document_id))
+            
+        query += " ORDER BY timestemp DESC"
+        
+        job_config = bigquery.QueryJobConfig(query_parameters=params)
+        return self.client.query(query, job_config=job_config).to_dataframe()

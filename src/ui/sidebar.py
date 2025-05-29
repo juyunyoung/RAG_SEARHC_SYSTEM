@@ -8,7 +8,32 @@ import os
 def render_sidebar():
     """Render the sidebar with file upload and document list"""
     with st.sidebar:
-        st.title("RAG Search System")
+        st.title("Your Document Search")        
+        # Document list section
+        st.subheader("Your Documents")
+        try:
+            db_client = BigQueryClient(dataset_id=os.getenv("BIGQUERY_DATASET"))
+            documents = db_client.get_user_documents(st.session_state.user_id)
+            
+            if documents.empty:
+                st.info("No documents uploaded yet")
+            else:
+                for _, doc in documents.iterrows():
+                    col1, col2 = st.columns([3, 1])
+                    with col1:
+                        st.write(f"📄 {doc['file_name']}")
+                    with col2:
+                        if st.button("🗑️", key=f"delete_{doc['document_id']}"):
+                            try:
+                                db_client.delete_document(doc['document_id'])
+                                st.rerun()
+                            except Exception as e:
+                                st.error(f"Error deleting document: {str(e)}")
+        
+        except Exception as e:
+            st.error(f"Error loading documents: {str(e)}")
+
+        # Document Search section
         
         if not is_authenticated():
             st.warning("Please log in to use the system")
@@ -67,29 +92,6 @@ def render_sidebar():
                         if os.path.exists(temp_path):
                             os.remove(temp_path)
         
-        # Document list section
-        st.subheader("Your Documents")
-        try:
-            db_client = BigQueryClient(dataset_id=os.getenv("BIGQUERY_DATASET"))
-            documents = db_client.get_user_documents(st.session_state.user_id)
-            
-            if documents.empty:
-                st.info("No documents uploaded yet")
-            else:
-                for _, doc in documents.iterrows():
-                    col1, col2 = st.columns([3, 1])
-                    with col1:
-                        st.write(f"📄 {doc['file_name']}")
-                    with col2:
-                        if st.button("🗑️", key=f"delete_{doc['document_id']}"):
-                            try:
-                                db_client.delete_document(doc['document_id'])
-                                st.rerun()
-                            except Exception as e:
-                                st.error(f"Error deleting document: {str(e)}")
-        
-        except Exception as e:
-            st.error(f"Error loading documents: {str(e)}")
         
         # Logout button
         if st.button("Logout"):

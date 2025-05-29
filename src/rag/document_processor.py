@@ -100,8 +100,8 @@ class DocumentProcessor:
             chunk_data = {
                 "chunk_id": str(uuid.uuid4()),
                 "document_id": document_id,
-                "chunk_text": chunk,
-                "embedding_vector": embedding.tolist(),
+                "content": chunk,
+                "embedding": embedding.tolist(),
                 "chunk_index": i
             }
             chunks_data.append(chunk_data)
@@ -121,7 +121,7 @@ class DocumentProcessor:
             # Calculate cosine similarity
             similarities = []
             for _, row in chunks_df.iterrows():
-                chunk_embedding = row["embedding_vector"]
+                chunk_embedding = row["embedding"]
                 similarity = self._cosine_similarity(question_embedding, chunk_embedding)
                 similarities.append((row["chunk_text"], similarity))
             
