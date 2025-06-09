@@ -1,42 +1,54 @@
+import os,  datetime
+
+import pandas as pd
+import numpy as np
+
 from google.cloud import bigquery
 from typing import List, Dict, Any
 from langchain_google_community import BigQueryVectorStore
 from langchain_huggingface import HuggingFaceEmbeddings
 from google.oauth2 import service_account
-import pandas as pd
-import os
-import json
-import io
-import numpy as np
 
 class BigQueryClient:
-    
-    def __init__(self, dataset_id: str):        
+    _instance = None
+    _initialized = False
 
-        self.credentials = service_account.Credentials.from_service_account_file(os.getenv("SERVICE_ACCOUNT_FILE"))     
-        self.client = bigquery.Client(credentials=self.credentials, project=self.credentials.project_id)                
-        self.dataset_id = dataset_id
-        self.users_table = f"{self.credentials.project_id}.{dataset_id}.USER"
-        self.documents_table = f"{self.credentials.project_id}.{dataset_id}.DOCUMENT"
-        self.chunks_table = f"{self.credentials.project_id}.{dataset_id}.DOCUMENT_CHUNK"
-        self.qa_table = f"{self.credentials.project_id}.{dataset_id}.QA_HISTORY"
-        self.embeddings = HuggingFaceEmbeddings(
-            model_name="sentence-transformers/all-MiniLM-L6-v2",
-            model_kwargs={'device': 'cpu'},
-            encode_kwargs={'normalize_embeddings': True}
-        )
-        
-        self.database = BigQueryVectorStore(
+    def __new__(cls):
+        if cls._instance is None:
+            cls._instance = super(BigQueryClient, cls).__new__(cls)
+        return cls._instance
+
+    def __init__(self):
+        if not self._initialized:
+            self.credentials = service_account.Credentials.from_service_account_file(os.getenv("SERVICE_ACCOUNT_FILE"))
+            self.client = bigquery.Client(credentials=self.credentials, project=self.credentials.project_id)
+            self.dataset_id = os.getenv("BIGQUERY_DATASET")
+            self.users_table = f"{self.credentials.project_id}.{self.dataset_id}.USER"
+            self.documents_table = f"{self.credentials.project_id}.{self.dataset_id}.DOCUMENT"
+            self.chunks_table = f"{self.credentials.project_id}.{self.dataset_id}.DOCUMENT_CHUNK"
+            self.qa_table = f"{self.credentials.project_id}.{self.dataset_id}.QA_HISTORY"
+            self.embeddings = HuggingFaceEmbeddings(
+                model_name="sentence-transformers/all-MiniLM-L6-v2",
+                model_kwargs={'device': 'cpu'},
+                encode_kwargs={'normalize_embeddings': True}
+            )
+            self.database = BigQueryVectorStore(
                 project_id=self.credentials.project_id,
                 dataset_name=self.dataset_id,
                 table_name="DOCUMENT_CHUNK",
                 location="asia-northeast3",
                 embedding=self.embeddings,
                 credentials=self.credentials,
-                embedding_dimension=384  # all-MiniLM-L6-v2 모델의 출력 차원
-        )
+                embedding_dimension=384
+            )
+            self._initialized = True
 
-
+    @classmethod
+    def get_instance(cls):
+        """싱글톤 인스턴스를 반환하는 클래스 메서드"""
+        if cls._instance is None:
+            cls._instance = cls()
+        return cls._instance
 
     def get_user(self, user_id: str) -> dict:
         """Get user by user_id"""
@@ -46,7 +58,7 @@ class BigQueryClient:
         WHERE user_id = @user_id
         LIMIT 1
         """
-        
+       
         job_config = bigquery.QueryJobConfig(
             query_parameters=[
                 bigquery.ScalarQueryParameter("user_id", "STRING", user_id)
@@ -59,7 +71,7 @@ class BigQueryClient:
         for row in results:
             return {
                 "user_id": row.user_id,
-                "password": row.password,             
+                "password": row.password,              
                 "last_login": row.last_login
             }
         return None
@@ -105,55 +117,7 @@ class BigQueryClient:
         except Exception as e:
             print(f"Error updating last login: {str(e)}")
             return False
-
-    def save_document(self, document_data: Dict[str, Any]):
-        """Save document metadata"""
-        try:
-            # Start a transaction
-            with self.client.transaction() as transaction:
-                # Insert document
-                rows_to_insert = [document_data]
-                errors = self.client.insert_rows_json(
-                    self.documents_table, 
-                    rows_to_insert,
-                    transaction=transaction
-                )
-                if errors:
-                    raise Exception(f"Error inserting document: {errors}")
-                
-                # If we get here, the transaction will be committed
-                return True
-        except Exception as e:
-            print(f"Error in save_document: {str(e)}")
-            return False
-
-    def save_chunks(self, chunks_data: List[Dict[str, Any]]):
-        """Save document chunks with embeddings"""
-        try:
-            # Start a transaction
-            with self.client.transaction() as transaction:
-                # Insert chunks
-                # errors = self.client.insert_rows_json(
-                #     self.chunks_table, 
-                #     chunks_data,
-                #     transaction=transaction
-                # )
-
-                # all_texts = [chunk['chunk_text'] for chunk in chunks_data]
-                # metadatas = [{"source": str(i)} for i in range(len(all_texts))]
-                # self.database.add_texts(all_texts, metadatas=metadatas);
-                self.database.save_document_with_chunks(chunks_data)
-
-
-                if errors:
-                    raise Exception(f"Error inserting chunks: {errors}")
-                
-                # If we get here, the transaction will be committed
-                return True
-        except Exception as e:
-            print(f"Error in save_chunks: {str(e)}")
-            return False
-
+ 
     def save_document_with_chunks(self, document_data: Dict[str, Any], chunks_data: List[Dict[str, Any]]) -> bool:
         """Save document and its chunks in a single transaction"""
         try:
@@ -264,7 +228,7 @@ class BigQueryClient:
                 "document_id": document_id,
                 "question": question,
                 "answer": answer,
-                "timestemp": current_time
+                "timestamp": current_time
             }
             
             print(f"Saving QA history: {qa_data}")  # 디버깅을 위한 로그
@@ -300,7 +264,7 @@ class BigQueryClient:
             query += " AND document_id = @document_id"
             params.append(bigquery.ScalarQueryParameter("document_id", "STRING", document_id))
             
-        query += " ORDER BY timestemp DESC"
+        query += " ORDER BY timestamp DESC"
         
         job_config = bigquery.QueryJobConfig(query_parameters=params)
         return self.client.query(query, job_config=job_config).to_dataframe()

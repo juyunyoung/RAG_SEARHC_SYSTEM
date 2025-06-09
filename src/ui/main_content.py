@@ -1,18 +1,13 @@
 import streamlit as st
+import os
 from auth.session import is_authenticated
 from database.bigquery_client import BigQueryClient
-from rag.document_processor import DocumentProcessor
-from langchain.chains import RetrievalQA
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain.chains import ConversationalRetrievalChain
 from langchain.memory import ConversationBufferMemory
 from langchain.prompts import PromptTemplate
-from langchain_community.embeddings import HuggingFaceEmbeddings
-from langchain_community.vectorstores import FAISS
-import os
-import numpy as np
 from dotenv import load_dotenv
-from langchain_community.llms import HuggingFaceEndpoint
+
 
 load_dotenv()
 
@@ -22,11 +17,8 @@ def render_main_content():
         st.warning("Please log in to use the system")
         return
     
-    # Initialize clients
-    doc_processor = DocumentProcessor()
-    db_client = BigQueryClient(
-        dataset_id=os.getenv("BIGQUERY_DATASET")
-    )
+    # Initialize clients    
+    db_client = BigQueryClient().get_instance()
     # Get user's documents
     documents = db_client.get_user_documents(st.session_state.user_id)
     
@@ -135,7 +127,7 @@ def render_main_content():
             
             if not qa_history.empty:
                 for _, qa in qa_history.iterrows():
-                    with st.expander(f"Q: {qa['question']} ({qa['timestemp']})"):
+                    with st.expander(f"Q: {qa['question']} ({qa['timestamp']})"):
                         st.write("A:", qa['answer'])
             else:
                 st.info("No Q&A history yet")
@@ -143,4 +135,3 @@ def render_main_content():
             st.error(f"Error loading Q&A history: {str(e)}")
     else:
         st.info("Please select a document to start.")
-

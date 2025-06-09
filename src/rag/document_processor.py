@@ -1,15 +1,15 @@
-from langchain.text_splitter import RecursiveCharacterTextSplitter
-from sentence_transformers import SentenceTransformer
-import uuid
-from typing import List, Dict, Any
-import json
-import datetime
-import pandas as pd
-import os
-from docx import Document as DocxDocument
-from PyPDF2 import PdfReader
-import torch
+# Standard library imports
+import datetime, json, os, uuid
+from typing import Dict, List, Any
+
+# Third party imports
 import numpy as np
+import pandas as pd
+import torch
+from docx import Document as DocxDocument
+from langchain.text_splitter import RecursiveCharacterTextSplitter
+from PyPDF2 import PdfReader
+from sentence_transformers import SentenceTransformer
 
 class DocumentProcessor:
     def __init__(self):

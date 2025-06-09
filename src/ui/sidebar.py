@@ -1,18 +1,18 @@
 import streamlit as st
+import os
 from auth.session import is_authenticated, logout_user
 from database.bigquery_client import BigQueryClient
 from rag.document_processor import DocumentProcessor
-from utils.email import send_upload_notification
-import os
+
 
 def render_sidebar():
     """Render the sidebar with file upload and document list"""
+    db_client = BigQueryClient.get_instance()
     with st.sidebar:
-        st.title("Your Document Search")        
+        st.title("My Document Search")        
         # Document list section
-        st.subheader("Your Documents")
-        try:
-            db_client = BigQueryClient(dataset_id=os.getenv("BIGQUERY_DATASET"))
+        st.subheader("My Documents")
+        try:            
             documents = db_client.get_user_documents(st.session_state.user_id)
             
             if documents.empty:
@@ -58,9 +58,6 @@ def render_sidebar():
             if st.button("Process Document"):
                 with st.spinner("Processing document..."):
                     try:
-                        
-                        # Initialize clients
-                        db_client = BigQueryClient(dataset_id=os.getenv("BIGQUERY_DATASET"))
                         doc_processor = DocumentProcessor()
                         
                         # Process document
@@ -76,11 +73,6 @@ def render_sidebar():
                         )
                         
                         if success:
-                            # Send notification
-                            # send_upload_notification(
-                            #     st.session_state.user_id,
-                            #     uploaded_file.name
-                            # )
                             st.success("Document processed successfully!")
                         else:
                             st.error("Failed to save document and chunks")
@@ -91,7 +83,6 @@ def render_sidebar():
                         # Clean up temporary file
                         if os.path.exists(temp_path):
                             os.remove(temp_path)
-        
         
         # Logout button
         if st.button("Logout"):
