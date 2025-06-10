@@ -1,15 +1,12 @@
 import streamlit as st
-import os
 from auth.session import is_authenticated
 from database.bigquery_client import BigQueryClient
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain.chains import ConversationalRetrievalChain
 from langchain.memory import ConversationBufferMemory
 from langchain.prompts import PromptTemplate
-from dotenv import load_dotenv
+from utils.config import Environment as env
 
-
-load_dotenv()
 
 def render_main_content():
     """Render the main content area with document selection and Q&A"""
@@ -42,7 +39,7 @@ def render_main_content():
         llm = ChatGoogleGenerativeAI(
             model="gemini-2.0-flash",
             temperature=0.5,
-            google_api_key=os.getenv("GOOGLE_API_KEY"),
+            google_api_key=env.GOOGLE_API_KEY,
             convert_system_message_to_human=True
         )
         # Initialize memory

@@ -1,5 +1,4 @@
-import os,  datetime
-
+import datetime
 import pandas as pd
 import numpy as np
 
@@ -8,6 +7,7 @@ from typing import List, Dict, Any
 from langchain_google_community import BigQueryVectorStore
 from langchain_huggingface import HuggingFaceEmbeddings
 from google.oauth2 import service_account
+from utils.config import Environment as env
 
 class BigQueryClient:
     _instance = None
@@ -20,9 +20,9 @@ class BigQueryClient:
 
     def __init__(self):
         if not self._initialized:
-            self.credentials = service_account.Credentials.from_service_account_file(os.getenv("SERVICE_ACCOUNT_FILE"))
+            self.credentials = service_account.Credentials.from_service_account_file(env.SERVICE_ACCOUNT_FILE)
             self.client = bigquery.Client(credentials=self.credentials, project=self.credentials.project_id)
-            self.dataset_id = os.getenv("BIGQUERY_DATASET")
+            self.dataset_id = env.BIGQUERY_DATASET
             self.users_table = f"{self.credentials.project_id}.{self.dataset_id}.USER"
             self.documents_table = f"{self.credentials.project_id}.{self.dataset_id}.DOCUMENT"
             self.chunks_table = f"{self.credentials.project_id}.{self.dataset_id}.DOCUMENT_CHUNK"
